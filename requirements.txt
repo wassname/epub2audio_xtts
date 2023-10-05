@@ -1,0 +1,5 @@
+PyPDF2==1.28.6
+fairseq
+torch==1.11.0
+torchaudio==0.11.0
+tika==2.6.0
