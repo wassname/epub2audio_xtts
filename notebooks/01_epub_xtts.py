@@ -6,6 +6,7 @@ from sanitize_filename import sanitize
 import re
 from pathlib import Path
 from TTS.api import TTS
+import pdb
 import torch
 import json
 
@@ -34,6 +35,8 @@ def limit_text_len(text, max_len=200, seps=['.', ',', '\n', ' ']) -> list:
 
     return return_text
 
+root_dir = Path(__file__).parent.parent.absolute()
+
 
 # Get the command line arguments
 parser2 = argparse.ArgumentParser()
@@ -41,18 +44,18 @@ parser2.add_argument('--epub', type=Path, default='data/A Short Guide to the Inn
                     help='PDF file to read')
 parser2.add_argument('-o', '--out', type=Path, default=None, help='Output folder')
 parser2.add_argument('-f', '--force', action='store_true', default=False, help='Overwrite')
-parser2.add_argument('-l', '--limit', type=int, default=3600,
+parser2.add_argument('-l', '--limit', type=int, default=400,
                     help='Maximum number of characters to synthesize at once')
 parser2.add_argument('-m', '--model', type=str, 
                     default="tts_models/multilingual/multi-dataset/xtts_v1",
                     # default='facebook/fastspeech2-en-ljspeech',
                     help='fairseq model to use from HuggingFace Hub')
-parser2.add_argument('-s', '--speaker', type=str, default="data/speakers/donaldrobertson.wav",
+parser2.add_argument('-s', '--speaker', type=Path, default=root_dir / "data/speakers/donaldrobertson.wav",
                     help='Speaker wav to use from the model')
 args = parser2.parse_args()
 
 if args.out is None:
-    args.out = Path('out') / sanitize(args.epub.stem)
+    args.out = root_dir / 'out' / sanitize(args.epub.stem)
 
 # load epib
 parsed = parser.from_file(str(args.epub))
@@ -115,6 +118,11 @@ for i, t in enumerate(text):
                     speaker_wav=args.speaker,
                     language="en")
     waveforms.append(wav_f)
+    
+    
+    # wav = tts.tts(text=t, language="en", speaker_wav=args.speaker)
+    # tts.synthesizer.save_wav(wav=wav, path=wav_f)
+    # pdb.set_trace()
 
     # Add the file to the playlist
     if last_top_chapter != out_dir:
