@@ -1,3 +1,4 @@
+"""modified from https://gist.github.com/endes0/0967d7c5bb1877559c4ae84be05e036c"""
 import tika
 from tika import parser
 
@@ -9,6 +10,7 @@ from TTS.api import TTS
 import pdb
 import torch
 import json
+from dataclasses import dataclass
 
 
 
@@ -75,11 +77,26 @@ if out_dir.exists():
             f.unlink()
         out_dir.rmdir()
 out_dir.mkdir()
-# create a playlist
-m3u = open(out_dir / 'playlist.m3u', 'w')
-m3u.write('#EXTM3U\n')
-last_top_chapter = None
-last_chapter = None
+
+class Writer():
+    out_dir: Path
+    tts: TTS
+    
+    def __post_init__(self):
+        self.m3u = open(self.out_dir / 'playlist.m3u', 'w')
+        self.m3u.write('#EXTM3U\n')
+
+    def write_chapter(self, waveforms):
+        self.tts.synthesizer.save_wav(wav=waveforms, path=wav_f)
+        self.m3u.write(f'{out_dir}[{i}]{i}.wav\n')
+
+    def flush(self):
+        self.f.flush()
+
+    def close(self):
+        self.m3u.close()
+
+writer = Writer(out_dir, tts)
 
 
 # write metadata to dir
@@ -99,7 +116,6 @@ tts = TTS(args.model, gpu=use_cuda, progress_bar=True)
 
 # split text
 text = limit_text_len([text], args.limit)
-# text = [text]
 waveforms = []
 for i, t in enumerate(text):
     t = t.replace('\n', ' ').strip()
@@ -113,23 +129,14 @@ for i, t in enumerate(text):
         continue
     print(t)
     wav_f = out_dir / f'{i}.wav'
-    tts.tts_to_file(text=t,
-                    file_path=wav_f,
-                    speaker_wav=args.speaker,
-                    language="en")
-    waveforms.append(wav_f)
     
+    wav = tts.tts(text=t, language="en", speaker_wav=args.speaker)
+    waveforms += wav
     
-    # wav = tts.tts(text=t, language="en", speaker_wav=args.speaker)
-    # tts.synthesizer.save_wav(wav=wav, path=wav_f)
-    # pdb.set_trace()
-
-    # Add the file to the playlist
-    if last_top_chapter != out_dir:
-        m3u.write(f'#EXTGRP:{out_dir}\n')
-        last_top_chapter = out_dir
-    if last_chapter != i:
-        m3u.write(f'#EXTINF:-1,{i}\n')
-        last_chapter = i
-    m3u.write(f'{out_dir}[{i}]{i}.wav\n')
-m3u.close()
+    if len(waveforms) > 10000000: # ~20G
+        writer.write_chapter(waveforms)
+        waveforms = []
+        
+if len(waveforms):        
+    writer.write_chapter(waveforms)
+writer.close()
