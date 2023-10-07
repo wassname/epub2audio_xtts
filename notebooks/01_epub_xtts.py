@@ -86,7 +86,9 @@ root_dir = Path(__file__).parent.parent.absolute()
 
 # Get the command line arguments
 parser2 = argparse.ArgumentParser()
-parser2.add_argument('--epub', type=Path, default='data/A Short Guide to the Inner Citadel - Massimo Pigliucci.epub',
+parser2.add_argument('--epub', type=Path, 
+                    #  default='data/A Short Guide to the Inner Citadel - Massimo Pigliucci.epub',
+                     default='data/golden_sayings_epictetus.epub',
                     help='PDF file to read')
 parser2.add_argument('-o', '--out', type=Path, default=None, help='Output folder')
 parser2.add_argument('-f', '--force', action='store_true', default=False, help='Overwrite')
@@ -159,7 +161,7 @@ with open(f_metadata, 'w') as fo:
 
 # load model
 use_cuda = False if args.test else torch.cuda.is_available()
-logger.info('use_cuda {use_cuda}')
+logger.info(f'use_cuda {use_cuda}')
 tts = TTS2(args.model, gpu=use_cuda, progress_bar=True)
 writer = Writer(out_dir, tts)
 

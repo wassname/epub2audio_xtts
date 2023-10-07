@@ -14,3 +14,6 @@ last thing I'll try is a very small chunk
 
 - https://github.com/suno-ai/bark/blob/main/notebooks/long_form_generation.ipynb
 - https://gist.github.com/endes0/0967d7c5bb1877559c4ae84be05e036c"
+
+
+Note I am now using my fork of TTS https://github.com/wassname/TTS

@@ -1,0 +1,14 @@
+name: tts
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.10
+  - pytorch-cuda=11.7
+  - torchaudio==0.13.1
+  - torchvision==0.14.1
+  - pytorch==1.13.1
+  - ca-certificates
+  - certifi
+  - openssl
+prefix: /home/wassname/miniforge3/envs/tts
