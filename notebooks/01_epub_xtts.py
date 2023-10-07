@@ -13,84 +13,37 @@ import json
 from dataclasses import dataclass
 # import pysbd
 from typing import List
-import tiktoken
+from loguru import logger
+from langchain.text_splitter import CharacterTextSplitter, RecursiveCharacterTextSplitter
 
-from TTS.tts.utils.text.tokenizer import TTSTokenizer
-from TTS.tts.utils.text.characters import Graphemes, IPAPhonemes
-# tokenizer = TTSTokenizer(use_phonemes=False, characters=Graphemes())
-from TTS.tts.layers.xtts.tokenizer import VoiceBpeTokenizer
-# TTS.tts.layers.xtts.tokenizer.VoiceBpeTokenizer
-# encoding = VoiceBpeTokenizer(vocab_file='/home/wassname/.local/share/tts/tts_models--multilingual--multi-dataset--xtts_v1/vocab.json')
-# encoding = tiktoken.get_encoding("cl100k_base")
-
-from langchain.text_splitter import RecursiveCharacterTextSplitter, TextSplitter
-
-
-
-class RecursiveCharacterTextSplitter2(RecursiveCharacterTextSplitter):
-    
-
-def split_string_with_limit(text: str, limit: int, encoding: tiktoken.Encoding):
-    # FIXME: this returns decoded text e.g. 'a short guide to the inner citadel a short guide to the inner citadel on pierre hadot’s classic analysis of marcus aurelius’ r '
-    # instead use langchain's https://github.com/langchain-ai/langchain/blob/57ade13b2b9c75d2967eb13c91417c356e2c805d/libs/langchain/langchain/text_splitter.py#L226
-    """Split a string into parts of given size without breaking words.
-    
-    Args:
-        text (str): Text to split.
-        limit (int): Maximum number of tokens per part.
-        encoding (tiktoken.Encoding): Encoding to use for tokenization.
-        
-    Returns:
-        list[str]: List of text parts.
-        
-    modified from https://gist.github.com/izikeros/17d9c8ab644bd2762acf6b19dd0cea39
-        
-    """
-    splitter = TextSplitter(length_function=lambda x:len(encoding(x)))
-    return splitter.split_text(text, limit)
-    
-    tokens = encoding.encode(text, "en")
-    parts = []
-    text_parts = []
-    current_part = []
-    current_count = 0
-
-    for token in tokens:
-        current_part.append(token)
-        current_count += 1
-
-        if current_count >= limit:
-            parts.append(current_part)
-            current_part = []
-            current_count = 0
-
-    if current_part:
-        parts.append(current_part)
-
-    # Convert the tokenized parts back to text
-    for part in parts:
-        text = [
-            encoding.decode([token]) #.decode("utf-8", errors="replace")
-            for token in part
-        ]
-        text_parts.append("".join(text))
-
-    return text_parts
 
 from TTS.utils.synthesizer import Synthesizer
 class Synthesizer2(Synthesizer):
-    def split_into_sentences(self, text) -> List[str]:
-        # TODO the best split is this https://api.python.langchain.com/en/latest/_modules/langchain/text_splitter.html#TextSplitter?
-        # Or use tikktoken?
-        
-        segs = split_string_with_limit(text, 400, self.tts_model.tokenizer)
-        # segs = self.seg.segment(text)
-        # segs = limit_len_text(segs, 400) # otherwise we seem to get positional emeddingerrors
-        # pdb.set_trace()
-        return segs
+    def split_into_sentences(self, text) -> List[str]:        
+        limit = 400
+        chunk_limit = limit//3
+        splitter = RecursiveCharacterTextSplitter(
+            length_function=lambda x: len(self.tts_model.tokenizer.encode(x, lang="en")),
+            chunk_size=chunk_limit,
+            chunk_overlap=0,
+            keep_separator=True,
+            strip_whitespace=True,
+            separators=[
+                       "\n\n", "\n", "\xa0", '<div>', '<p>', '<br>', "\r", ".",  "!", "?", 
+                '"', "'", "‘", "’", "“", "”", "„", "‟",  
+                "(", ")", "[", "]", "{", "}", 
+                "…", ":", ";", "—",
+                " ", '' # these ensure that there is always something to split by so chunks are always at limit
+        ],
+        )
+        texts = splitter.split_text(text)
+        ls = [splitter._length_function(x) for x in texts]
+        logger.debug(f'split lengths {ls}. max={max(ls)} chunk_limit={chunk_limit}')
+        assert all([l<=limit for l in ls]), 'all senteces should be below limit'
+        return texts
 
 class TTS2(TTS):
-    """modify this so that each sentace is below min chars."""
+    """modify this so that each sentance is below min chars."""
     
     def load_tts_model_by_name(self, model_name: str, gpu: bool = False):
         """Load one of 🐸TTS models by name.
@@ -128,35 +81,6 @@ class TTS2(TTS):
             )
 
 
-
-# def limit_text_len(text, max_len=200, seps=['.', ',', '\n', ' '], lang = "en") -> list:
-#     seg = pysbd.Segmenter(language=lang, clean=True)
-#     return seg.segment(text)
-#     self.voice_converter.vs_model
-    
-# def limit_len_text(text: list, max_len=400, seps=['.', ',', '\n', ' '], lang = "en") -> list: 
-#     """If the some element of text is too long, divide it in smaller parts using the separators."""
-#     return_text = []
-#     i = 0
-#     for t in text:
-#         if len(t) > max_len:
-#             splited = t.split(seps[0])
-
-#             # Restore the separators
-#             for j in range(0, len(splited)-1):
-#                 splited[j] = splited[j] + seps[0]
-
-#             # If the split is not good enough, try with the next separator
-#             if len(seps) > 1 and len(max(splited, key=len)) > max_len:
-#                 splited = limit_len_text(splited, max_len, seps[1:])
-#             return_text = return_text + splited
-#         else:
-#             return_text.append(t)
-
-#         i = i + 1
-
-#     return return_text
-
 root_dir = Path(__file__).parent.parent.absolute()
 
 
@@ -178,7 +102,9 @@ parser2.add_argument('-s', '--speaker', type=Path, default=root_dir / "data/spea
 args = parser2.parse_args()
 
 if args.out is None:
-    args.out = root_dir / 'out' / sanitize(args.epub.stem).replace(' ', '_').lower()
+    from datetime import datetime
+    timestamp = datetime.utcnow().strftime('%Y%m%d_%H-%M-%S')
+    args.out = root_dir / 'out' / (sanitize(args.epub.stem).replace(' ', '_').lower() + timestamp)
 
 # load epib
 parsed = parser.from_file(str(args.epub))
@@ -191,14 +117,14 @@ if args.test:
 out_dir = Path(args.out)
 if out_dir.exists():
     if not args.force:
-        print('Output folder already exists. Use -f to overwrite.')
+        logger.warning('Output folder already exists. Use -f to overwrite.')
         exit(1)
     else:
         for f in out_dir.glob('*'):
             f.unlink()
         out_dir.rmdir()
 out_dir.mkdir()
-print(f'Output folder: {out_dir}')
+logger.info(f'Output folder: {out_dir}')
 
 @dataclass
 class Writer:
@@ -233,7 +159,7 @@ with open(f_metadata, 'w') as fo:
 
 # load model
 use_cuda = False if args.test else torch.cuda.is_available()
-print('use_cuda', use_cuda)
+logger.info('use_cuda {use_cuda}')
 tts = TTS2(args.model, gpu=use_cuda, progress_bar=True)
 writer = Writer(out_dir, tts)
 
@@ -248,15 +174,16 @@ for i, t in enumerate(text):
 
     # check if contains words or numbers
     if not re.search('[a-zA-Z0-9]', t):
-        print('Skipping text without words or numbers', t)
+        logger.debug('Skipping text without words or numbers', t)
         continue
-    print('text', t)
+    logger.debug('current sentence', t)
     
     wav = tts.tts(text=t, language="en", speaker_wav=args.speaker)
     waveforms += wav
     
-    if len(waveforms) > 10000000:  # ~20G
+    if len(waveforms) > 10000000//4:  # ~20G
         wav_f = out_dir / f'{i}.wav'
+        logger.warning(f"wrote chapter {wav_f}")
         writer.write_chapter(waveforms, wav_f)
         waveforms = []
         
