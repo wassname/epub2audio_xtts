@@ -13,10 +13,11 @@ python notebooks/01_epub_xtts.py  --epub "data/A Short Guide to the Inner Citade
 > record pip and conda requirements
 
 ~~~bash
-export PROJECT_NAME=tts
+set -x -e
+source activate tts
 mkdir -p requirements
-conda env export --no-builds --from-history --name $PROJECT_NAME > requirements/environment.min.yaml
-conda env export --name $PROJECT_NAME > requirements/environment.max.yaml
+conda env export --no-builds --from-history > requirements/environment.min.yaml
+conda env export > requirements/environment.max.yaml
 python -m pip freeze > requirements/pip.conda.txt
-# cd requirements && conda-lock -f environment.max.yaml -p linux-64
+cd requirements && conda-lock -f environment.max.yaml -p linux-64
 ~~~

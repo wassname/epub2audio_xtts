@@ -1,13 +1,15 @@
 """modified from https://gist.github.com/endes0/0967d7c5bb1877559c4ae84be05e036c"""
-import tika
 from tika import parser
 
+import torchaudio
 import argparse
 from sanitize_filename import sanitize
 import re
 from pathlib import Path
-from TTS.api import TTS
-import pdb
+
+from tortoise.api import TextToSpeech
+from tortoise.utils.audio import load_audio, load_voice, load_voices
+
 import torch
 import json
 from dataclasses import dataclass
@@ -17,69 +19,28 @@ from loguru import logger
 from langchain.text_splitter import CharacterTextSplitter, RecursiveCharacterTextSplitter
 
 
-from TTS.utils.synthesizer import Synthesizer
-class Synthesizer2(Synthesizer):
-    def split_into_sentences(self, text) -> List[str]:        
-        limit = 400
-        chunk_limit = limit//3
-        splitter = RecursiveCharacterTextSplitter(
-            length_function=lambda x: len(self.tts_model.tokenizer.encode(x, lang="en")),
-            chunk_size=chunk_limit,
-            chunk_overlap=0,
-            keep_separator=True,
-            strip_whitespace=True,
-            separators=[
-                       "\n\n", "\n", "\xa0", '<div>', '<p>', '<br>', "\r", ".",  "!", "?", 
-                '"', "'", "‘", "’", "“", "”", "„", "‟",  
-                "(", ")", "[", "]", "{", "}", 
-                "…", ":", ";", "—",
-                " ", '' # these ensure that there is always something to split by so chunks are always at limit
-        ],
-        )
-        texts = splitter.split_text(text)
-        ls = [splitter._length_function(x) for x in texts]
-        logger.debug(f'split lengths {ls}. max={max(ls)} chunk_limit={chunk_limit}')
-        assert all([l<=limit for l in ls]), 'all senteces should be below limit'
-        return texts
-
-class TTS2(TTS):
-    """modify this so that each sentance is below min chars."""
-    
-    def load_tts_model_by_name(self, model_name: str, gpu: bool = False):
-        """Load one of 🐸TTS models by name.
-
-        Args:
-            model_name (str): Model name to load. You can list models by ```tts.models```.
-            gpu (bool, optional): Enable/disable GPU. Some models might be too slow on CPU. Defaults to False.
-
-        TODO: Add tests
-        """
-        self.synthesizer = None
-        self.csapi = None
-        self.model_name = model_name
-
-        if "coqui_studio" in model_name:
-            self.csapi = CS_API()
-        else:
-            model_path, config_path, vocoder_path, vocoder_config_path, model_dir = self.download_model_by_name(
-                model_name
-            )
-
-            # init synthesizer
-            # None values are fetch from the model
-            self.synthesizer = Synthesizer2(
-                tts_checkpoint=model_path,
-                tts_config_path=config_path,
-                tts_speakers_file=None,
-                tts_languages_file=None,
-                vocoder_checkpoint=vocoder_path,
-                vocoder_config=vocoder_config_path,
-                encoder_checkpoint=None,
-                encoder_config=None,
-                model_dir=model_dir,
-                use_cuda=gpu,
-            )
-
+def split_into_sentences(text) -> List[str]:        
+    limit = 400
+    chunk_limit = limit//3
+    splitter = RecursiveCharacterTextSplitter(
+        length_function=lambda x: len(tokenizer.encode(x, lang="en")),
+        chunk_size=chunk_limit,
+        chunk_overlap=0,
+        keep_separator=True,
+        strip_whitespace=True,
+        separators=[
+                    "\n\n", "\n", "\xa0", '<div>', '<p>', '<br>', "\r", ".",  "!", "?", 
+            '"', "'", "‘", "’", "“", "”", "„", "‟",  
+            "(", ")", "[", "]", "{", "}", 
+            "…", ":", ";", "—",
+            " ", '' # these ensure that there is always something to split by so chunks are always at limit
+    ],
+    )
+    texts = splitter.split_text(text)
+    ls = [splitter._length_function(x) for x in texts]
+    logger.debug(f'split lengths {ls}. max={max(ls)} chunk_limit={chunk_limit}')
+    assert all([l<=limit for l in ls]), 'all senteces should be below limit'
+    return texts
 
 root_dir = Path(__file__).parent.parent.absolute()
 
@@ -88,7 +49,7 @@ root_dir = Path(__file__).parent.parent.absolute()
 parser2 = argparse.ArgumentParser()
 parser2.add_argument('--epub', type=Path, 
                     #  default='data/A Short Guide to the Inner Citadel - Massimo Pigliucci.epub',
-                     default='data/golden_sayings_epictetus.epub',
+                     default='data/golden_saying_of_epictetus.epub',
                     help='PDF file to read')
 parser2.add_argument('-o', '--out', type=Path, default=None, help='Output folder')
 parser2.add_argument('-f', '--force', action='store_true', default=False, help='Overwrite')
@@ -131,7 +92,7 @@ logger.info(f'Output folder: {out_dir}')
 @dataclass
 class Writer:
     out_dir: Path
-    tts: TTS
+    # tts: TTS
     
     def __post_init__(self):
         self.m3u = open(self.out_dir / 'playlist.m3u', 'w')
@@ -140,7 +101,8 @@ class Writer:
 
     def write_chapter(self, waveforms):
         wav_f = out_dir / f'{self.chapter}.wav'
-        self.tts.synthesizer.save_wav(wav=waveforms, path=wav_f)
+        # self.tts.synthesizer.save_wav(wav=waveforms, path=wav_f)
+        torchaudio.save(wav_f, waveforms.squeeze(0).cpu(), 24000)
         self.m3u.write(f'{wav_f}\n')
         self.chapter += 1
 
@@ -162,8 +124,12 @@ with open(f_metadata, 'w') as fo:
 # load model
 use_cuda = False if args.test else torch.cuda.is_available()
 logger.info(f'use_cuda {use_cuda}')
-tts = TTS2(args.model, gpu=use_cuda, progress_bar=True)
+# tts = TTS2(args.model, gpu=use_cuda, progress_bar=True)
+# voice_samples, conditioning_latents = load_voice(voice)
+tts = TextToSpeech(use_deepspeed=True, kv_cache=True, half=True)
 writer = Writer(out_dir, tts)
+clips_paths = [args.speaker]
+reference_clips = [load_audio(p, 22050) for p in clips_paths]
 
 # split text
 text = [text] #limit_text_len(text, max_len=args.limit, lang='en')
@@ -176,11 +142,16 @@ for i, t in enumerate(text):
 
     # check if contains words or numbers
     if not re.search('[a-zA-Z0-9]', t):
-        logger.debug('Skipping text without words or numbers', t)
+        logger.debug(f'Skipping text without words or numbers {t}')
         continue
-    logger.debug('current sentence', t)
+    logger.debug(f'current sentence {t}')
     
-    wav = tts.tts(text=t, language="en", speaker_wav=args.speaker)
+    # https://github.com/neonbjb/tortoise-tts 
+    # https://github.com/neonbjb/tortoise-tts/blob/main/tortoise_tts.ipynb
+    # ultra_fast fast standard high_quality
+    wav = tts.tts_with_preset("your text here", voice_samples=reference_clips, preset='fast')
+    
+    # wav = tts.tts(text=t, language="en", speaker_wav=args.speaker)
     waveforms += wav
     
     if len(waveforms) > 10000000//4:  # ~20G

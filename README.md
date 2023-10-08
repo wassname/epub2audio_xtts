@@ -30,5 +30,3 @@ see also:
 
 
 UPTO: see [research notes](./research_notes.md)
-
- 
