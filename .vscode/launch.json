@@ -5,15 +5,19 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Current File",
+            "name": "01_epub_xtts.py",
             "type": "python",
             "request": "launch",
             // "program": "${file}",
+            "env": {
+                // "PYTHONPATH": "${workspaceFolder}"
+                "CUDA_VISIBLE_DEVICES": "",
+            },
             "program": "${workspaceFolder}/notebooks/01_epub_xtts.py",
             "console": "integratedTerminal",
             "args": [
                 "-f", 
-                "-t",
+                // "-t",
             ],
             "justMyCode": false
         }
