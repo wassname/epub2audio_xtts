@@ -8,9 +8,10 @@ Here I'm using the Tortise model... which is changing rapidly. So this code migh
 
 <audio controls="controls">
   <source type="audio/ogg" src="data/a_short_guide_to_the_inner_citadel_-_massimo_pigliucci_donald_robertson.ogg"></source>
-  ./data/a_short_guide_to_the_inner_citadel_-_massimo_pigliucci_donald_robertson.ogg
+  
 </audio>
-[data/a_short_guide_to_the_inner_citadel_-_massimo_pigliucci_donald_robertson.ogg](./data/a_short_guide_to_the_inner_citadel_-_massimo_pigliucci_donald_robertson.ogg)
+
+output example: [data/a_short_guide_to_the_inner_citadel_-_massimo_pigliucci_donald_robertson.ogg](./data/a_short_guide_to_the_inner_citadel_-_massimo_pigliucci_donald_robertson.ogg)
 
 ## Entrypoint
 
