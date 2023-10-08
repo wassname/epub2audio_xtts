@@ -17,3 +17,8 @@ last thing I'll try is a very small chunk
 
 
 Note I am now using my fork of TTS https://github.com/wassname/TTS
+
+
+# 2023-10-08 11:21:08
+
+OK I switched to tortise, it has a similar quality to TTS, but I find it way less buggy and simpler to work with. I did have to play with the requirements a bit to get it working, but it's documents in requirements.txt
